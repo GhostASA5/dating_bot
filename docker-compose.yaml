@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+
+  postgres_user:
+    container_name: postgres_user
+    image: postgres:latest
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=user_db
+      - POSTGRES_PASSWORD=user_db
+      - POSTGRES_DB=user_db
+
+
+  postgres:
+    container_name: postgres_bot
+    image: postgres:latest
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=bot_db
+      - POSTGRES_PASSWORD=bot_db
+      - POSTGRES_DB=bot_db

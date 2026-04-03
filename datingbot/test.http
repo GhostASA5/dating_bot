@@ -1,0 +1,21 @@
+### GET request to example server
+GET https://examples.http-client.intellij.net/get
+    ?generated-in=IntelliJ IDEA
+
+###
+
+# curl -F "url=https://nonpolarizable-vena-naiant.ngrok-free.dev" "https://api.telegram.org/bot8441860807:AAGOC9HIQHHDyQ7h028c1gaqkvM-gXiLcEE/setWebhook"
+POST https://api.telegram.org/bot8633628477:AAG1UTj393bZXZ5gEL_GQoUGrrvpVZhbOao/setWebhook
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="url"
+
+https://nonpolarizable-vena-naiant.ngrok-free.dev/telegram/webhook
+--WebAppBoundary--
+
+###
+
+GET https://api.telegram.org/bot8633628477:AAG1UTj393bZXZ5gEL_GQoUGrrvpVZhbOao/getWebhookInfo
+
+{"minAge":19,"maxAge":23,"gender":"ж","city":"Москва"}

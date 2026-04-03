@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: datingbot
+
+  datasource:
+    url: jdbc:postgresql://localhost:5434/bot_db
+    username: bot_db
+    password: bot_db
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 8082
+
+bot:
+  token: 8633628477:AAG1UTj393bZXZ5gEL_GQoUGrrvpVZhbOao
+  base-url: https://api.telegram.org
+
+user:
+  service:
+    url: http://localhost:8081
