@@ -1,6 +1,7 @@
 package com.project.datingbot.service;
 
 import com.project.datingbot.dto.UserCreateRequest;
+import com.project.datingbot.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,5 +30,12 @@ public class UserServiceClient {
             log.error("Error creating user", e);
             throw e;
         }
+    }
+
+    public User getUser(Long id) {
+        return restTemplate.getForObject(
+                userServiceUrl + "/users/" + id,
+                User.class
+        );
     }
 }

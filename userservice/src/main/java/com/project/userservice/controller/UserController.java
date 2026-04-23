@@ -1,14 +1,12 @@
 package com.project.userservice.controller;
 
 import com.project.userservice.dto.UserCreateRequest;
+import com.project.userservice.entity.User;
 import com.project.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/users")
@@ -24,5 +22,10 @@ public class UserController {
 
         userService.createUser(request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{userId}")
+    public ResponseEntity<User> createUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(userService.getUser(userId));
     }
 }

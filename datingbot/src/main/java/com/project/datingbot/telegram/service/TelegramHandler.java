@@ -5,12 +5,15 @@ import com.project.datingbot.dto.Preferences;
 import com.project.datingbot.dto.UserCreateRequest;
 import com.project.datingbot.entity.RegistrationContext;
 import com.project.datingbot.entity.RegistrationStep;
-import com.project.datingbot.service.RegistrationService;
-import com.project.datingbot.service.UserServiceClient;
+import com.project.datingbot.entity.User;
+import com.project.datingbot.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.Update;
+
+import java.util.List;
+import java.util.Map;
 
 
 @RequiredArgsConstructor
@@ -21,14 +24,40 @@ public class TelegramHandler {
     private final TelegramMessageService telegramService;
     private final RegistrationService registrationService;
     private final UserServiceClient userServiceClient;
+    private final InteractionClient interactionClient;
+    private final FeedState feedState;
+    private final FeedClient feedClient;
+
+
 
     public void handle(Update update) {
+
+        if (update.hasCallbackQuery()) {
+
+            String data = update.getCallbackQuery().getData();
+            Long userId = update.getCallbackQuery().getFrom().getId();
+            String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
+
+            String[] parts = data.split(":");
+            String type = parts[0];
+            Long targetId = Long.valueOf(parts[1]);
+
+            interactionClient.send(userId, targetId, type);
+
+            sendNextProfile(chatId, userId);
+            return;
+        }
 
         if (!update.hasMessage() || !update.getMessage().hasText()) return;
 
         Long telegramId = update.getMessage().getFrom().getId();
         String chatId = update.getMessage().getChatId().toString();
         String text = update.getMessage().getText().trim();
+
+        if (text.equals("/feed")) {
+            loadFeed(telegramId, chatId);
+            return;
+        }
 
         if (text.equals("/start")) {
             registrationService.start(telegramId);
@@ -141,5 +170,63 @@ public class TelegramHandler {
         registrationService.delete(ctx.getTelegramId());
 
         telegramService.sendPlain(chatId, "✅ Регистрация завершена!");
+    }
+
+    private void loadFeed(Long userId, String chatId) {
+
+        List<Long> feed = feedClient.getFeed(userId);
+
+        if (feed == null || feed.isEmpty()) {
+            telegramService.sendPlain(chatId, "Нет анкет 😢");
+            return;
+        }
+
+        feedState.setFeed(userId, feed);
+
+        sendNextProfile(chatId, userId);
+    }
+
+    private void sendNextProfile(String chatId, Long userId) {
+
+        Long candidateId = feedState.next(userId);
+
+        if (candidateId == null) {
+            telegramService.sendPlain(chatId, "Анкеты закончились");
+            return;
+        }
+
+        User user = userServiceClient.getUser(candidateId);
+
+        String text = formatUser(user);
+
+        telegramService.sendWithButtons(
+                chatId,
+                text,
+                buildButtons(candidateId)
+        );
+    }
+
+    private String formatUser(User user) {
+        return String.format(
+                "%s, %d лет\n📍 Проживает %s\n",
+                user.getUsername(),
+                user.getAge(),
+                user.getCity()
+        );
+    }
+
+    public Map<String, Object> buildButtons(Long targetId) {
+
+        List<List<Map<String, String>>> keyboard = List.of(
+                List.of(
+                        Map.of("text", "❤️ Like", "callback_data", "LIKE:" + targetId),
+                        Map.of("text", "❌ Skip", "callback_data", "SKIP:" + targetId)
+                ),
+                List.of(
+                        Map.of("text", "💬 Message", "callback_data", "MSG:" + targetId)
+                )
+        );
+
+        return Map.of("inline_keyboard", keyboard);
     }
 }

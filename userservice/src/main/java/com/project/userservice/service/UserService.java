@@ -34,4 +34,8 @@ public class UserService {
 
         log.info("User saved: {}", user.getTelegramId());
     }
+
+    public User getUser(Long userId) {
+        return userRepository.findById(userId).orElse(null);
+    }
 }

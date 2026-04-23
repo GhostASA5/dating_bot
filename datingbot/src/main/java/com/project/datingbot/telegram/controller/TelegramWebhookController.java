@@ -1,5 +1,7 @@
 package com.project.datingbot.telegram.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.datingbot.telegram.service.TelegramHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,11 +17,12 @@ public class TelegramWebhookController {
 
     private final TelegramHandler telegramHandler;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @PostMapping()
     @ResponseStatus(HttpStatus.OK)
-    public void onUpdate(@RequestBody Update update) {
-        log.info("Webhook received update: hasMessage={} hasCallback={} updateId={}",
-                update.hasMessage(), update.hasCallbackQuery(), update.getUpdateId());
+    public void onUpdate(@RequestBody String rawJson) throws JsonProcessingException {
+        Update update = objectMapper.readValue(rawJson, Update.class);
 
         telegramHandler.handle(update);
     }
