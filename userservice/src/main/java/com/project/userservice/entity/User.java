@@ -32,4 +32,7 @@ public class User {
 
 
     private Boolean profileComplete;
+
+    /** Ключ объекта аватара в S3 (Amazon API через LocalStack/AWS). */
+    private String avatarS3Key;
 }

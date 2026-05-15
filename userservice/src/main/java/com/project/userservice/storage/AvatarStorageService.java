@@ -1,0 +1,44 @@
+package com.project.userservice.storage;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+@Service
+@RequiredArgsConstructor
+public class AvatarStorageService {
+
+    private final S3Client s3Client;
+
+    @Value("${aws.s3.bucket}")
+    private String bucket;
+
+    public void putObject(String key, byte[] data, String contentType) {
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .contentType(contentType)
+                        .build(),
+                RequestBody.fromBytes(data)
+        );
+    }
+
+    public byte[] getObject(String key) {
+        try (ResponseInputStream<GetObjectResponse> stream = s3Client.getObject(
+                GetObjectRequest.builder().bucket(bucket).key(key).build())) {
+            return stream.readAllBytes();
+        } catch (NoSuchKeyException e) {
+            return null;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read S3 object: " + key, e);
+        }
+    }
+}

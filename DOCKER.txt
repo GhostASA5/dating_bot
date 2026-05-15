@@ -1,0 +1,83 @@
+Запуск всего стека в Docker
+===========================
+
+1) Создайте файл .env в корне репозитория (рядом с docker-compose.yaml):
+
+   Скопируйте .env.example в .env и задайте BOT_TOKEN — токен бота от BotFather.
+
+2) Сборка и запуск:
+
+   docker compose build
+   docker compose up -d
+
+3) Сервисы на хосте (порты):
+
+   - datingbot (webhook)     http://localhost:8082
+   - userservice             http://localhost:8081
+   - ratingservice           http://localhost:8083
+   - interactionservice      http://localhost:8084
+   - Grafana                 http://localhost:3000  (admin / admin)
+   - Prometheus              http://localhost:9090
+   - Loki                    http://localhost:3100
+   - Kafka (с хоста)         localhost:9092
+   - PostgreSQL user_db      localhost:5433
+   - PostgreSQL bot_db       localhost:5434
+   - Redis                   localhost:6379
+   - LocalStack (S3)         localhost:4566
+
+4) Управление ботом (после /start):
+
+   Кнопки внизу чата: 📋 Лента | ❤️ Лайки | 📥 Сообщения
+   В анкете: ❤️ Like | ❌ Skip | 💬 Написать
+   Лайки и входящие — кнопки «Написать» / «Ответить»; при наборе текста — ❌ Отмена
+   /cancel — отменить набор сообщения; /help — справка
+
+5) Webhook Telegram (ngrok / публичный HTTPS):
+
+   URL должен быть ровно таким (HTTPS, без редиректа на HTTP):
+   https://<ваш-домен>/telegram/webhook
+
+   Локально: туннель на порт 8082 (datingbot), например:
+   ngrok http 8082
+
+   Частые проблемы именно ngrok + Telegram:
+
+   - Бесплатный ngrok (*.ngrok-free.dev / *.ngrok-free.app) может отдавать HTML-страницу
+     «Visit Site» вместо проксирования на приложение. Telegram не проходит эту страницу как
+     браузер — апдейты не доходят или приходят «мусор». Решения: платный ngrok с своим
+     доменом, другой туннель (Cloudflare Tunnel, localhost.run и т.п.), либо деплой с
+     нормальным HTTPS без межстраничного предупреждения.
+
+   - После смены URL туннеля обязательно снова вызвать setWebhook на новый https://.../telegram/webhook.
+     Имеет смысл один раз вызвать deleteWebhook, затем setWebhook с drop_pending_updates=true,
+     чтобы сбросить старую очередь и не получать лавину повторов.
+
+   - Проверка: GET https://api.telegram.org/bot<TOKEN>/getWebhookInfo
+     Смотрите last_error_message, last_error_date, pending_update_count.
+
+   - Таймаут: Telegram ждёт ответа вебхука ограниченное время; если datingbot долго отвечает
+     (БД, микросервисы), возможны повторные доставки одного и того же update_id — визуально
+     «зацикливание». Держите обработку короткой или отвечайте 200 быстро и обрабатывайте асинхронно.
+
+   Опционально в .env: BOT_WEBHOOK_SECRET=<случайная строка 1–256 символов: буквы, цифры, подчёркивание>
+   При setWebhook передайте тот же secret_token=... — Telegram пришлёт заголовок
+   X-Telegram-Bot-Api-Secret-Token; datingbot отклонит запросы без него (защита от сканирования
+   публичного URL туннеля).
+
+6) Логи и метрики:
+
+   Grafana http://localhost:3000 (admin / admin), дашборд «DatingBot overview».
+   Prometheus: http://localhost:9090/targets (все job — UP).
+
+   Если сервисы запускаете ЛОКАЛЬНО (IDE), а Prometheus в Docker:
+     docker compose -f docker-compose.yaml -f docker-compose.local.yml up -d loki prometheus grafana ...
+     Подробно: observability/README.txt (раздел «Гибридный режим»).
+
+   Логи: LOKI_ENABLED=true, LOKI_PUSH_URL=http://127.0.0.1:3100/loki/api/v1/push
+   Grafana → Explore → Loki → {service="datingbot"}
+
+7) Остановка:
+
+   docker compose down
+
+Примечание: первый запуск userservice создаёт бакет S3 в LocalStack; дождитесь healthy у PostgreSQL.

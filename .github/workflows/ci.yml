@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: "0:test-token-for-ci"
+      LOKI_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Validate docker compose
+        run: docker compose -f docker-compose.yaml config
+
+      - name: Start infrastructure
+        run: |
+          docker compose -f docker-compose.yaml up -d postgres_user postgres redis zookeeper kafka localstack
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:4566/_localstack/health >/dev/null 2>&1; then
+              echo "localstack up"
+              break
+            fi
+            sleep 2
+          done
+          sleep 35
+
+      - name: Maven verify (datingbot)
+        run: mvn -B verify -f datingbot/pom.xml
+
+      - name: Maven verify (userservice)
+        run: mvn -B verify -f userservice/pom.xml
+
+      - name: Maven verify (interactionservice)
+        run: mvn -B verify -f interactionservice/pom.xml
+
+      - name: Maven verify (ratingservice)
+        run: mvn -B verify -f ratingservice/pom.xml

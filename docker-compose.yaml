@@ -1,27 +1,34 @@
-version: '3'
-
 services:
 
   postgres_user:
     container_name: postgres_user
-    image: postgres:latest
+    image: postgres:16-alpine
     ports:
       - "5433:5432"
     environment:
-      - POSTGRES_USER=user_db
-      - POSTGRES_PASSWORD=user_db
-      - POSTGRES_DB=user_db
-
+      POSTGRES_USER: user_db
+      POSTGRES_PASSWORD: user_db
+      POSTGRES_DB: user_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_db -d user_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 25
 
   postgres:
     container_name: postgres_bot
-    image: postgres:latest
+    image: postgres:16-alpine
     ports:
       - "5434:5432"
     environment:
-      - POSTGRES_USER=bot_db
-      - POSTGRES_PASSWORD=bot_db
-      - POSTGRES_DB=bot_db
+      POSTGRES_USER: bot_db
+      POSTGRES_PASSWORD: bot_db
+      POSTGRES_DB: bot_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bot_db -d bot_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 25
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -41,13 +48,206 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPIC_ENABLE: 'true'
+      KAFKA_AUTO_CREATE_TOPIC_ENABLE: "true"
 
   redis:
-    image: redis:7.2
+    image: redis:7.2-alpine
     container_name: redis
     ports:
       - "6379:6379"
+
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3
+      DEBUG: "0"
+      AWS_DEFAULT_REGION: us-east-1
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/config.yaml
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: promtail
+    volumes:
+      - ./observability/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    ports:
+      - "8089:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+    depends_on:
+#      - userservice
+#      - datingbot
+#      - ratingservice
+#      - interactionservice
+      - cadvisor
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+#  userservice:
+#    build:
+#      context: ./userservice
+#      dockerfile: Dockerfile
+#    container_name: userservice
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      SPRING_PROFILES_ACTIVE: loki
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_user:5432/user_db
+#      SPRING_DATASOURCE_USERNAME: user_db
+#      SPRING_DATASOURCE_PASSWORD: user_db
+#      AWS_S3_ENDPOINT: http://localstack:4566
+#      AWS_S3_INIT: "true"
+#      LOKI_ENABLED: "true"
+#      LOKI_PUSH_URL: http://loki:3100/loki/api/v1/push
+#    depends_on:
+#      postgres_user:
+#        condition: service_healthy
+#      localstack:
+#        condition: service_started
+#      loki:
+#        condition: service_started
+#    restart: unless-stopped
+#
+#  interactionservice:
+#    build:
+#      context: ./interactionservice
+#      dockerfile: Dockerfile
+#    container_name: interactionservice
+#    ports:
+#      - "8084:8084"
+#    environment:
+#      SPRING_PROFILES_ACTIVE: loki
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_user:5432/user_db
+#      SPRING_DATASOURCE_USERNAME: user_db
+#      SPRING_DATASOURCE_PASSWORD: user_db
+#      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+#      LOKI_ENABLED: "true"
+#      LOKI_PUSH_URL: http://loki:3100/loki/api/v1/push
+#    depends_on:
+#      postgres_user:
+#        condition: service_healthy
+#      kafka:
+#        condition: service_started
+#      loki:
+#        condition: service_started
+#    restart: unless-stopped
+#
+#  ratingservice:
+#    build:
+#      context: ./ratingservice
+#      dockerfile: Dockerfile
+#    container_name: ratingservice
+#    ports:
+#      - "8083:8083"
+#    environment:
+#      SPRING_PROFILES_ACTIVE: loki
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_user:5432/user_db
+#      SPRING_DATASOURCE_USERNAME: user_db
+#      SPRING_DATASOURCE_PASSWORD: user_db
+#      SPRING_DATA_REDIS_HOST: redis
+#      SPRING_DATA_REDIS_PORT: "6379"
+#      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+#      LOKI_ENABLED: "true"
+#      LOKI_PUSH_URL: http://loki:3100/loki/api/v1/push
+#    depends_on:
+#      postgres_user:
+#        condition: service_healthy
+#      redis:
+#        condition: service_started
+#      kafka:
+#        condition: service_started
+#      loki:
+#        condition: service_started
+#    restart: unless-stopped
+#
+#  datingbot:
+#    build:
+#      context: ./datingbot
+#      dockerfile: Dockerfile
+#    container_name: datingbot
+#    ports:
+#      - "8082:8082"
+#    environment:
+#      SPRING_PROFILES_ACTIVE: loki
+#      BOT_TOKEN: ${BOT_TOKEN:-}
+#      BOT_WEBHOOK_SECRET: ${BOT_WEBHOOK_SECRET:-}
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bot_db
+#      SPRING_DATASOURCE_USERNAME: bot_db
+#      SPRING_DATASOURCE_PASSWORD: bot_db
+#      USER_SERVICE_URL: http://userservice:8081
+#      RATING_SERVICE_URL: http://ratingservice:8083
+#      INTERACTION_SERVICE_URL: http://interactionservice:8084
+#      LOKI_ENABLED: "true"
+#      LOKI_PUSH_URL: http://loki:3100/loki/api/v1/push
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      userservice:
+#        condition: service_started
+#      ratingservice:
+#        condition: service_started
+#      interactionservice:
+#        condition: service_started
+#      kafka:
+#        condition: service_started
+#      loki:
+#        condition: service_started
+#    restart: unless-stopped
+
+volumes:
+  loki-data:
+  grafana-data:

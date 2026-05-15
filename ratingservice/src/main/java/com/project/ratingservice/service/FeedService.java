@@ -7,17 +7,17 @@ import com.project.ratingservice.repository.InteractionRepository;
 import com.project.ratingservice.repository.ScoreRepository;
 import com.project.ratingservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FeedService {
 
     private final UserRepository userRepo;
@@ -104,10 +104,46 @@ public class FeedService {
         return score;
     }
 
+    /**
+     * Пересчитывает поведенческий скор кандидата (лайки/скипы по telegram id цели)
+     * и обновляет все связанные пары в user_candidate_scores. Сбрасывает кэш ленты наблюдателя.
+     */
+    public void refreshScoresAfterInteraction(Long actorTelegramId, Long targetTelegramId) {
+        log.info("rating.feed: refresh scores after interaction actorTelegram={} targetTelegram={}",
+                actorTelegramId, targetTelegramId);
+        User candidate = userRepo.findByTelegramId(targetTelegramId);
+        if (candidate == null) {
+            invalidateFeedCache(actorTelegramId);
+            return;
+        }
+
+        double behavioral = calculateBehavioralByTargetTelegram(targetTelegramId);
+
+        List<UserCandidateScore> rows = scoreRepo.findAllByCandidateId(candidate.getId());
+        for (UserCandidateScore row : rows) {
+            userRepo.findById(row.getViewerId()).ifPresent(viewer -> {
+                double primary = calculatePrimary(viewer, candidate);
+                saveScore(viewer.getId(), candidate.getId(), primary, behavioral, combine(primary, behavioral));
+            });
+        }
+
+        User actor = userRepo.findByTelegramId(actorTelegramId);
+        if (actor != null && scoreRepo.findByViewerIdAndCandidateId(actor.getId(), candidate.getId()).isEmpty()) {
+            double primary = calculatePrimary(actor, candidate);
+            saveScore(actor.getId(), candidate.getId(), primary, behavioral, combine(primary, behavioral));
+        }
+
+        invalidateFeedCache(actorTelegramId);
+    }
+
+    private void invalidateFeedCache(Long viewerTelegramId) {
+        redisTemplate.delete("feed:" + viewerTelegramId);
+    }
+
     private UserCandidateScore createInitialScore(User viewer, User candidate) {
 
         double primary = calculatePrimary(viewer, candidate);
-        double behavioral = 0.5;
+        double behavioral = calculateBehavioralByTargetTelegram(candidate.getTelegramId());
         double combined = combine(primary, behavioral);
 
         UserCandidateScore score = new UserCandidateScore();
@@ -140,9 +176,10 @@ public class FeedService {
         return score;
     }
 
-    private double calculateBehavioral(Long candidateId) {
-        long likes = interactionRepo.countByTargetIdAndType(candidateId, "LIKE");
-        long skips = interactionRepo.countByTargetIdAndType(candidateId, "SKIP");
+    /** В interactions targetId — это telegram id получателя действия. */
+    private double calculateBehavioralByTargetTelegram(Long targetTelegramId) {
+        long likes = interactionRepo.countByTargetIdAndType(targetTelegramId, "LIKE");
+        long skips = interactionRepo.countByTargetIdAndType(targetTelegramId, "SKIP");
 
         if (likes + skips == 0) return 0.5;
 
@@ -168,9 +205,5 @@ public class FeedService {
         score.setUpdatedAt(LocalDateTime.now());
 
         scoreRepo.save(score);
-    }
-
-    public void onInteraction(Long userId) {
-        generateFeed(userId);
     }
 }

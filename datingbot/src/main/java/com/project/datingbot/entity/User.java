@@ -32,4 +32,6 @@ public class User {
 
 
     private Boolean profileComplete;
+
+    private String avatarS3Key;
 }

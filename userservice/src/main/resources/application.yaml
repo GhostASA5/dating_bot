@@ -3,9 +3,9 @@ spring:
     name: userservice
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/user_db
-    username: user_db
-    password: user_db
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/user_db}
+    username: ${SPRING_DATASOURCE_USERNAME:user_db}
+    password: ${SPRING_DATASOURCE_PASSWORD:user_db}
 
   jpa:
     hibernate:
@@ -14,5 +14,41 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  codec:
+    max-in-memory-size: 15MB
+
 server:
   port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+
+logging:
+  loki:
+    enabled: ${LOKI_ENABLED:false}
+    url: ${LOKI_PUSH_URL:http://127.0.0.1:3100/loki/api/v1/push}
+
+aws:
+  s3:
+    endpoint: ${AWS_S3_ENDPOINT:http://localhost:4566}
+    region: ${AWS_S3_REGION:us-east-1}
+    bucket: ${AWS_S3_BUCKET:datingbot-media}
+    initialize-bucket: ${AWS_S3_INIT:true}

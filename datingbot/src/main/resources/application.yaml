@@ -3,9 +3,9 @@ spring:
     name: datingbot
 
   datasource:
-    url: jdbc:postgresql://localhost:5434/bot_db
-    username: bot_db
-    password: bot_db
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/bot_db}
+    username: ${SPRING_DATASOURCE_USERNAME:bot_db}
+    password: ${SPRING_DATASOURCE_PASSWORD:bot_db}
 
   jpa:
     hibernate:
@@ -17,10 +17,52 @@ spring:
 server:
   port: 8082
 
+# Outgoing HTTP (microservices, Telegram Bot API)
+http:
+  client:
+    connect-timeout-ms: ${HTTP_CLIENT_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${HTTP_CLIENT_READ_TIMEOUT_MS:30000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  endpoint:
+    prometheus:
+      enabled: true
+
+logging:
+  loki:
+    enabled: ${LOKI_ENABLED:false}
+    url: ${LOKI_PUSH_URL:http://127.0.0.1:3100/loki/api/v1/push}
+  pattern:
+    level: "%5p [correlationId=%X{correlationId} telegramId=%X{telegramId}]"
+
 bot:
-  token: 8633628477:AAG1UTj393bZXZ5gEL_GQoUGrrvpVZhbOao
+  token: ${BOT_TOKEN:8633628477:AAG1UTj393bZXZ5gEL_GQoUGrrvpVZhbOao}
   base-url: https://api.telegram.org
+  # Должен совпадать с secret_token при setWebhook (Telegram шлёт заголовок X-Telegram-Bot-Api-Secret-Token).
+  webhook-secret: ${BOT_WEBHOOK_SECRET:}
 
 user:
   service:
-    url: http://localhost:8081
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+
+rating:
+  service:
+    url: ${RATING_SERVICE_URL:http://localhost:8083}
+
+interaction:
+  service:
+    url: ${INTERACTION_SERVICE_URL:http://localhost:8084}

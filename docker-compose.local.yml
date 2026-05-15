@@ -1,0 +1,14 @@
+# Override для гибридного режима: микросервисы на хосте, observability в Docker.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.local.yml up -d \
+#     postgres_user postgres redis kafka zookeeper localstack loki prometheus grafana promtail cadvisor
+#
+#   Затем локально (в каждом модуле или из IDE):
+#     LOKI_ENABLED=true SPRING_PROFILES_ACTIVE=loki mvn spring-boot:run
+
+services:
+  prometheus:
+    volumes:
+      - ./observability/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

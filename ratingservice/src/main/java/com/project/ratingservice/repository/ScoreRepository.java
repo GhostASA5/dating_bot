@@ -11,4 +11,6 @@ public interface ScoreRepository extends JpaRepository<UserCandidateScore, Long>
     List<UserCandidateScore> findTop50ByViewerIdOrderByCombinedScoreDesc(Long viewerId);
 
     Optional<UserCandidateScore> findByViewerIdAndCandidateId(Long viewerId, Long candidateId);
+
+    List<UserCandidateScore> findAllByCandidateId(Long candidateId);
 }

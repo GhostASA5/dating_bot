@@ -1,0 +1,42 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Targets ниже — только когда сервисы в том же docker compose.
+# Микросервисы на хосте (IDE): docker-compose.local.yml + prometheus-local.yml
+
+scrape_configs:
+  # Spring Boot Actuator (/actuator/prometheus)
+  - job_name: userservice
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["userservice:8081"]
+        labels:
+          application: userservice
+
+  - job_name: datingbot
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["datingbot:8082"]
+        labels:
+          application: datingbot
+
+  - job_name: ratingservice
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ratingservice:8083"]
+        labels:
+          application: ratingservice
+
+  - job_name: interactionservice
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["interactionservice:8084"]
+        labels:
+          application: interactionservice
+
+  # CPU/RAM контейнеров Docker (только при запуске через docker compose)
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
